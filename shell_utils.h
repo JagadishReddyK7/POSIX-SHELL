@@ -6,8 +6,11 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <vector>
-#include <sstream>
+#include <string.h>
+#include <sys/wait.h>
 #include <dirent.h>
+#include <fstream>
+#include <limits>
 
 using namespace std;
 
@@ -18,15 +21,28 @@ typedef struct {
 } sysInfo_t;
 
 typedef struct {
+    string command;
     vector<string> args;
+    string input_file;
+    string output_file;
     bool background;
+    bool append_output;
 } command_t;
 
+typedef struct 
+{
+    pid_t pid;
+    command_t command;
+} pInfo_t;
+
 sysInfo_t get_system_info();
-vector<string> parse_input(stringstream& ss);
+vector<command_t> parse_input(string& input_string);
 int handle_tab_stroke(int count, int key);
 int builtin_echo(vector<string>& args);
-int builtin_execute(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd);
+int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd);
 int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd);
+
+vector<command_t> parse_line(string& line);
+command_t parse_single_command(string& part);
 
 #endif
