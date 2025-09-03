@@ -14,6 +14,8 @@ void shell_loop() {
     string cwd;
     int status=1;
     rl_bind_key('\t', handle_tab_stroke);
+    string history_file="/home/jagadish/Workspace/AOS_Assignment_2/shell_history.txt";
+    read_history(history_file.c_str());
     
     do {
         sys_info=get_system_info();
@@ -23,7 +25,11 @@ void shell_loop() {
         string shell_display="<"+username+"@"+sys_info.hostname+":"+cwd+">";
         input_line=readline(shell_display.c_str());
         if(input_line==nullptr) {
-            exit(0);
+            break;
+        }
+        if(input_line && *input_line) {
+            add_history(input_line);
+            append_history(1, history_file.c_str());
         }
         string input_string(input_line);
         if(!input_string.empty()) {
@@ -44,8 +50,9 @@ void shell_loop() {
             }
         }
         else status=1;
-        
-    }while(status);
+        free(input_line);
+    } while(status);
+    write_history(history_file.c_str());
 }
 
 int main() {

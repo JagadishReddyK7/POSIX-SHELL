@@ -12,6 +12,10 @@
 #include <fstream>
 #include <limits>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <pwd.h>
+#include <grp.h>
+#include <ctime>
 
 using namespace std;
 

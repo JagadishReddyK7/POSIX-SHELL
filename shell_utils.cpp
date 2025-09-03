@@ -193,6 +193,37 @@ int change_stdout_stdin(command_t &cmd) {
     return 1;
 }
 
+void display_fileInfo(string& path) {
+    struct stat file_status;
+    if(lstat(path.c_str(), &file_status)==-1) {
+        perror("error retrieving file status");
+        return;
+    }
+    struct passwd *password=getpwuid(file_status.st_uid);
+    struct group *group = getgrgid(file_status.st_gid);
+    char buf[80];
+    struct tm *time=localtime(&file_status.st_mtime);
+    strftime(buf, sizeof(buf), "%b %d %H:%M", time);
+    size_t last_slash = path.find_last_of('/');
+    string filename = (last_slash == string::npos) ? path : path.substr(last_slash + 1);
+    cout<< (S_ISDIR(file_status.st_mode) ? "d" : "-")
+        << (file_status.st_mode & S_IRUSR ? "r" : "-")
+        << (file_status.st_mode & S_IWUSR ? "w" : "-")
+        << (file_status.st_mode & S_IXUSR ? "x" : "-")
+        << (file_status.st_mode & S_IRGRP ? "r" : "-")
+        << (file_status.st_mode & S_IWGRP ? "w" : "-")
+        << (file_status.st_mode & S_IXGRP ? "x" : "-")
+        << (file_status.st_mode & S_IROTH ? "r" : "-")
+        << (file_status.st_mode & S_IWOTH ? "w" : "-")
+        << (file_status.st_mode & S_IXOTH ? "x" : "-");
+    cout<< " "<<file_status.st_nlink;
+    if(password!=NULL) cout<<" "<<password->pw_name;
+    cout<<" "<<group->gr_name;
+    cout<<" "<<file_status.st_size;
+    cout<<"    "<<buf;
+    cout<<"    "<<filename<<endl;
+}
+
 int builtin_echo(command_t &cmd) {
     int saved_out=dup(1);
     int saved_in=dup(0);
@@ -208,16 +239,53 @@ int builtin_echo(command_t &cmd) {
 }
 
 int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd) {
-    const char* path=".";
-    DIR *dir=opendir(path);
-    if(!dir) perror("ls failed");
-    struct dirent *dir_entry;
-    while((dir_entry=readdir(dir))) {
-        if(dir_entry->d_name[0]!='.') {
-            cout<<dir_entry->d_name<<endl;
+    // const char* path=".";
+    string path=".";
+    bool show_hidden=false;
+    bool list_all=false;
+    vector<string> final_args;
+    for(string token:args) {
+        if(token[0]=='-') {
+            if(token.find('a')!=string::npos) show_hidden=true;
+            if(token.find('l')!=string::npos) list_all=true;
+        }
+        else final_args.push_back(token);
+    }
+    if(final_args.size()==1) {
+        path=".";
+        DIR *dir=opendir(path.c_str());
+        if(!dir) {
+            perror("ls failed");
+            return 1;
+        }
+        struct dirent *dir_entry;
+        while((dir_entry=readdir(dir))) {
+            if(!show_hidden && dir_entry->d_name[0]=='.') continue;
+            string full_path=path+"/"+dir_entry->d_name;
+            if(!list_all) cout<<dir_entry->d_name<<endl;
+            else display_fileInfo(full_path);
+        }
+        closedir(dir);
+    }
+    else {
+        for(size_t i=1;i<final_args.size();i++) {
+            path=pwd+"/"+final_args[i];
+            cout<<final_args[i]<<"/:"<<endl;
+            DIR *dir=opendir(path.c_str());
+            if(!dir) {
+                perror("ls failed");
+                return 1;
+            }
+            struct dirent *dir_entry;
+            while((dir_entry=readdir(dir))) {
+                if(!show_hidden && dir_entry->d_name[0]=='.') continue;
+                string full_path=path+"/"+dir_entry->d_name;
+                if(!list_all) cout<<dir_entry->d_name<<endl;
+                else display_fileInfo(full_path);
+            }
+            closedir(dir);
         }
     }
-    closedir(dir);
     return 1;
 }
 

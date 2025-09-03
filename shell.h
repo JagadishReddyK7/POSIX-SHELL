@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stack>
 #include <readline/readline.h>
+#include <readline/history.h>
 #include "shell_utils.h"
 
 #endif

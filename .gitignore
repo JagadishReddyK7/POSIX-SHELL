@@ -3,4 +3,5 @@ obj
 .vscode
 hello.txt
 hello2.txt
-test_dir
+grep.txt
+shell_history.txt
