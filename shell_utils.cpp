@@ -66,9 +66,27 @@ vector<command_t> parse_input(string& input_string) {
     return commands;
 }
 
-vector<command_t> parse_line(string& line) {
-    vector<command_t> commands;
+// vector<command_t> parse_line(string& line) {
+//     vector<command_t> commands;
     
+//     size_t pos = 0;
+//     string part;
+//     while ((pos = line.find(';')) != string::npos) 
+//     {
+//         part = line.substr(0, pos);
+//         line.erase(0, pos + 1); 
+//         if (part.empty()) continue;
+        
+//         commands.push_back(parse_single_command(part));
+//     }
+//     if (!line.empty()) {
+//         commands.push_back(parse_single_command(line));
+//     }
+//     return commands;
+// }
+
+vector<string> parse_line(string& line) {
+    vector<string> commands;
     size_t pos = 0;
     string part;
     while ((pos = line.find(';')) != string::npos) 
@@ -77,9 +95,29 @@ vector<command_t> parse_line(string& line) {
         line.erase(0, pos + 1); 
         if (part.empty()) continue;
         
+        commands.push_back(part);
+    }
+    if (!line.empty()) {
+        commands.push_back(line);
+    }
+    return commands;
+}
+
+vector<command_t> parse_pipe(string& line) {
+    vector<command_t> commands;
+    size_t pos = 0;
+    string part;
+    while ((pos = line.find('|')) != string::npos) 
+    {
+        part = line.substr(0, pos);
+        // cout<<part<<endl;
+        line.erase(0, pos + 1); 
+        if (part.empty()) continue;
+        
         commands.push_back(parse_single_command(part));
     }
     if (!line.empty()) {
+        // cout<<line<<"pp"<<endl;
         commands.push_back(parse_single_command(line));
     }
     return commands;
@@ -89,6 +127,7 @@ command_t parse_single_command(string& part) {
     command_t cmd;
     cmd.command = part;
     cmd.append_output = false;
+    cmd.background=false;
     vector<string> raw_tokens = tokenize(part);
     if (raw_tokens.empty()) return cmd;
 
@@ -132,12 +171,39 @@ int handle_tab_stroke(int count, int key) {
     return 0;
 }
 
-int builtin_echo(vector<string>& args) {
-    int num=args.size();
+int change_stdout_stdin(command_t &cmd) {
+    if(!cmd.input_file.empty()) {
+        int in_fd = open(cmd.input_file.c_str(), O_RDONLY);
+        if(in_fd==-1) {
+            perror("Unable to open input file");
+        }
+        dup2(in_fd, STDIN_FILENO);
+        close(in_fd);
+    }
+
+    if(!cmd.output_file.empty()) {
+        int flags=O_WRONLY | O_CREAT;
+        if(cmd.append_output) flags |=O_APPEND;
+        else flags |= O_TRUNC;
+        int out_fd=open(cmd.output_file.c_str(), flags, 0644);
+        if(out_fd==-1) perror("Unable to open output file");
+        dup2(out_fd, STDOUT_FILENO);
+        close(out_fd);
+    }
+    return 1;
+}
+
+int builtin_echo(command_t &cmd) {
+    int saved_out=dup(1);
+    int saved_in=dup(0);
+    change_stdout_stdin(cmd);
+    int num=cmd.args.size();
     for(int i=1;i<num;i++) {
-        cout<<args[i]<<" ";
+        cout<<cmd.args[i]<<" ";
     }
     cout<<endl;
+    dup2(saved_out, STDOUT_FILENO);
+    dup2(saved_in, STDIN_FILENO);
     return 1;
 }
 
@@ -212,7 +278,8 @@ int builtin_cd(vector<string>& args, const string& home_dir, const string& pwd, 
         cout<<target_dir<<endl;
     }
     else if(args[1]=="..") {
-
+        if(home_dir==pwd) target_dir=home_dir;
+        else target_dir=args[1];
     }
     else {
         target_dir=args[1];
@@ -224,9 +291,52 @@ int builtin_cd(vector<string>& args, const string& home_dir, const string& pwd, 
     return 1;
 }
 
+int execute_pipe(vector<command_t> &commands, const string& home_dir, const string& pwd, string& last_wd) {
+    size_t num = commands.size();
+    // cout<<num<<"*******"<<endl;
+    int pipes[num-1][2];
+    for(size_t i=0;i<num-1;i++) {
+        if(pipe(pipes[i])==-1) {
+            perror("Pipe failed");
+            return 1;
+        }
+    }
+    for(size_t i=0;i<num;i++) {
+        pid_t pid=fork();
+        if(pid==-1) {
+            perror("fork failed");
+            return 1;
+        }
+        else if(pid==0) {
+            if(i>0) {
+                dup2(pipes[i-1][0], STDIN_FILENO);
+            }
+            if(i<num-1) {
+                dup2(pipes[i][1], STDOUT_FILENO);
+            }
+            for(size_t j=0;j<num-1;j++) {
+                close(pipes[j][0]);
+                close(pipes[j][1]);
+            }
+            // cout<<commands[i].args[0]<<"########"<<endl;
+            builtin_execute(commands[i], home_dir, pwd, last_wd);
+            // cout<<commands[i].args[0]<<"$$$$$$$$$$$$"<<endl;
+            exit(0);
+        }
+    }
+    for(size_t i=0;i<num-1;i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    }
+    for(size_t i=0;i<num;i++) {
+        wait(NULL);
+    }
+    return 1;
+}
+
 int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd) {
     if(cmd.args[0]=="echo") {
-        return builtin_echo(cmd.args);
+        return builtin_echo(cmd);
     }
     else if(cmd.args[0]=="cd") {
         return builtin_cd(cmd.args, home_dir, pwd, last_wd);
@@ -256,6 +366,26 @@ int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, s
             return 1;
         }
         else if(pid==0) {
+
+            if(!cmd.input_file.empty()) {
+                int in_fd = open(cmd.input_file.c_str(), O_RDONLY);
+                if(in_fd==-1) {
+                    perror("Unable to open input file");
+                }
+                dup2(in_fd, STDIN_FILENO);
+                close(in_fd);
+            }
+
+            if(!cmd.output_file.empty()) {
+                int flags=O_WRONLY | O_CREAT;
+                if(cmd.append_output) flags |=O_APPEND;
+                else flags |= O_TRUNC;
+                int out_fd=open(cmd.output_file.c_str(), flags, 0644);
+                if(out_fd==-1) perror("Unable to open output file");
+                dup2(out_fd, STDOUT_FILENO);
+                close(out_fd);
+            }
+
             vector<char*> argv;
             for(string arg:cmd.args) {
                 argv.push_back(const_cast<char*>(arg.c_str()));

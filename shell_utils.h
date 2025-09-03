@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <fstream>
 #include <limits>
+#include <fcntl.h>
 
 using namespace std;
 
@@ -41,8 +42,10 @@ int handle_tab_stroke(int count, int key);
 int builtin_echo(vector<string>& args);
 int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd);
 int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd);
+int execute_pipe(vector<command_t> &commands, const string& home_dir, const string& pwd, string& last_wd);
 
-vector<command_t> parse_line(string& line);
+vector<string> parse_line(string& line);
+vector<command_t> parse_pipe(string& line);
 command_t parse_single_command(string& part);
 
 #endif
