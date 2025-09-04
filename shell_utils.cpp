@@ -174,6 +174,15 @@ int change_stdout_stdin(command_t &cmd) {
     return 1;
 }
 
+int get_block_size(string& path) {
+    struct stat file_status;
+    if(lstat(path.c_str(), &file_status)==-1) {
+        perror("error retrieving file status");
+        return 0;
+    }
+    return file_status.st_blocks;
+}
+
 void display_fileInfo(string& path) {
     struct stat file_status;
     if(lstat(path.c_str(), &file_status)==-1) {
@@ -233,6 +242,19 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
         else final_args.push_back(token);
     }
     if(final_args.size()==1) {
+        int count;
+        path=".";
+        DIR *s_dir=opendir(path.c_str());
+        if(!s_dir) {
+            perror("ls failed");
+            return 1;
+        }
+        struct dirent *s_dir_entry;
+        while(s_dir_entry==readdir(s_dir)) {
+            string s_path=path+"/"+s_dir_entry->d_name;
+            count+=get_block_size(s_path);
+        }
+        if(list_all) cout<<"total "<<count<<endl;
         path=".";
         DIR *dir=opendir(path.c_str());
         if(!dir) {
@@ -244,12 +266,27 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
             if(!show_hidden && dir_entry->d_name[0]=='.') continue;
             string full_path=path+"/"+dir_entry->d_name;
             if(!list_all) cout<<dir_entry->d_name<<endl;
-            else display_fileInfo(full_path);
+            else {
+                display_fileInfo(full_path);
+            }
         }
         closedir(dir);
     }
     else {
         for(size_t i=1;i<final_args.size();i++) {
+            int count;
+            path=pwd+"/"+final_args[i];
+            DIR *s_dir=opendir(path.c_str());
+            if(!s_dir) {
+                perror("ls failed");
+                return 1;
+            }
+            struct dirent *s_dir_entry;
+            while(s_dir_entry==readdir(s_dir)) {
+                string s_path=path+"/"+s_dir_entry->d_name;
+                count+=get_block_size(s_path);
+            }
+            if(list_all) cout<<"total "<<count<<endl;
             path=pwd+"/"+final_args[i];
             cout<<final_args[i]<<"/:"<<endl;
             DIR *dir=opendir(path.c_str());
@@ -262,7 +299,9 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
                 if(!show_hidden && dir_entry->d_name[0]=='.') continue;
                 string full_path=path+"/"+dir_entry->d_name;
                 if(!list_all) cout<<dir_entry->d_name<<endl;
-                else display_fileInfo(full_path);
+                else {
+                    display_fileInfo(full_path);
+                }
             }
             closedir(dir);
         }
