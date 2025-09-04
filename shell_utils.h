@@ -42,6 +42,7 @@ typedef struct
 } pInfo_t;
 
 extern string history_file;
+extern pid_t child_pid;
 
 sysInfo_t get_system_info();
 vector<command_t> parse_input(string& input_string);
@@ -52,6 +53,8 @@ int execute_pipe(vector<command_t> &commands, const string& home_dir, const stri
 
 char **handle_tab_stroke(const char *inp, int left, int right);
 char *word_matcher(const char *target, int idx);
+void handle_signal(int sig);
+void handle_sigint(int sig);
 vector<string> parse_line(string& line);
 vector<command_t> parse_pipe(string& line);
 command_t parse_single_command(string& part);

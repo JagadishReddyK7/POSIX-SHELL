@@ -4,6 +4,7 @@ using namespace std;
 
 string last_wd;
 string history_file="shell_history.txt";
+pid_t child_pid=-1;
 
 void shell_loop() {
     char* input_line;
@@ -15,8 +16,8 @@ void shell_loop() {
     int status=1;
     read_history(history_file.c_str());
     rl_attempted_completion_function = handle_tab_stroke;
-    signal(SIGINT, SIG_IGN);
-    
+    signal(SIGINT, handle_sigint);
+    signal(SIGTSTP, handle_signal);
     do {
         sys_info=get_system_info();
         if(home_dir==sys_info.cwd) cwd="~";

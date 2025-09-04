@@ -121,6 +121,18 @@ command_t parse_single_command(string& part) {
     return cmd;
 }
 
+void handle_signal(int sig) {
+    if(child_pid>0) {
+        cout<<"Process pushed to background -> pid: "<<child_pid<<endl;
+        kill(child_pid,sig);
+    }
+}
+void handle_sigint(int sig) {
+    if(child_pid>0) {
+        cout<<"Process terminated -> pid: "<<child_pid<<endl;
+    }
+}
+
 char **handle_tab_stroke(const char *inp, int left, int right) {
     (void)right;
     if (left == 0) return rl_completion_matches(inp, word_matcher);
@@ -277,7 +289,7 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
             perror("ls failed");
             return 1;
         }
-        struct dirent *s_dir_entry;
+        struct dirent *s_dir_entry=nullptr;
         while(s_dir_entry==readdir(s_dir)) {
             if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
             string s_path=path+"/"+s_dir_entry->d_name;
@@ -290,7 +302,7 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
             perror("ls failed");
             return 1;
         }
-        struct dirent *dir_entry;
+        struct dirent *dir_entry=nullptr;
         while((dir_entry=readdir(dir))) {
             if(!show_hidden && dir_entry->d_name[0]=='.') continue;
             string full_path=path+"/"+dir_entry->d_name;
@@ -314,7 +326,7 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
                 perror("ls failed");
                 return 1;
             }
-            struct dirent *s_dir_entry;
+            struct dirent *s_dir_entry=nullptr;
             while(s_dir_entry==readdir(s_dir)) {
                 if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
                 string s_path=path+"/"+s_dir_entry->d_name;
@@ -327,7 +339,7 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
                 perror("ls failed");
                 return 1;
             }
-            struct dirent *dir_entry;
+            struct dirent *dir_entry=nullptr;
             while((dir_entry=readdir(dir))) {
                 if(!show_hidden && dir_entry->d_name[0]=='.') continue;
                 string full_path=path+"/"+dir_entry->d_name;
@@ -598,7 +610,7 @@ int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, s
             return 1;
         }
         else if(pid==0) {
-
+            signal(SIGINT, SIG_DFL);
             if(!cmd.input_file.empty()) {
                 int in_fd = open(cmd.input_file.c_str(), O_RDONLY);
                 if(in_fd==-1) {
@@ -634,7 +646,10 @@ int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, s
             }
             else {
                 int state;
+                child_pid  = pid;
                 waitpid(pid, &state, WUNTRACED);
+                child_pid = -1;
+
             }
         }
         return 1;
