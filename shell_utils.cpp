@@ -410,6 +410,58 @@ bool builtin_search(const string &path, string& target_file) {
     return false;
 }
 
+void builtin_history(int index, bool limit) {
+    int fd=open(history_file.c_str(), O_RDONLY);
+    if(fd==-1) {
+        perror("Error opening file");
+        return;
+    }
+    string cmd;
+    ssize_t bytes_read;
+    char buf[4096];
+    vector<string> commands;
+    bytes_read=read(fd, buf, 4096);
+    if(bytes_read>0) {
+        for(ssize_t i=0;i<bytes_read;i++) {
+            if(buf[i]=='\n') {
+                if(!commands.empty() && cmd==commands.back()) {
+                    cmd.clear();
+                    continue;
+                }
+                if(commands.size()==20) {
+                    commands.erase(commands.begin());
+                }
+                commands.push_back(cmd);
+                cmd.clear();
+            }
+            else {
+                cmd+=buf[i];
+            }
+        }
+    }
+    if(!cmd.empty()) {
+        if(!commands.empty() && cmd==commands.back() && commands.size()==20) {
+            commands.erase(commands.begin());
+        }
+        commands.push_back(cmd);
+        cmd.clear();
+    }
+    close(fd);
+    if(limit) {
+        size_t cnt=(commands.size()>10 ? 10 : commands.size());
+        size_t start=commands.size()-cnt;
+        for(size_t i=start;i<commands.size();i++) {
+            cout<<commands[i]<<endl;
+        }
+    }
+    else {
+        size_t start = commands.size()-index;
+        for(size_t i=start;i<commands.size();i++) {
+            cout<<commands[i]<<endl;
+        }
+    }
+}
+
 int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd) {
     if(cmd.args[0]=="echo") {
         return builtin_echo(cmd);
@@ -449,7 +501,26 @@ int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, s
         }
     }
     else if(cmd.args[0]=="history") {
-        
+        if(cmd.args.size()==1) {
+            builtin_history(10, true);
+            return 1;
+        }
+        else if(cmd.args.size()>2) {
+            perror("Invalid arguments");
+        }
+        else {
+            if(!isNumber(cmd.args[1])) {
+                perror("Enter a number");
+                return 1;
+            }
+            int num=atoi(cmd.args[1].c_str());
+            if(num>20) {
+                cout<<"Last 20 commands only:"<<endl;
+                builtin_history(20, false);
+            }
+            else builtin_history(num, false);
+        }
+        return 1;
     }
     else {
         pid_t pid=fork();

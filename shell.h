@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <vector>
-#include <sstream>
 #include <stack>
 #include <readline/readline.h>
 #include <readline/history.h>
