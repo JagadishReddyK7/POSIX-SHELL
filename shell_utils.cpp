@@ -224,11 +224,11 @@ int get_block_size(string& path) {
     return file_status.st_blocks;
 }
 
-void display_fileInfo(string& path) {
+int display_fileInfo(string& path) {
     struct stat file_status;
     if(lstat(path.c_str(), &file_status)==-1) {
         perror("error retrieving file status");
-        return;
+        return 0;
     }
     struct passwd *password=getpwuid(file_status.st_uid);
     struct group *group = getgrgid(file_status.st_gid);
@@ -253,6 +253,7 @@ void display_fileInfo(string& path) {
     cout<<" "<<file_status.st_size;
     cout<<"    "<<buf;
     cout<<"    "<<filename<<endl;
+    return file_status.st_blocks;
 }
 
 int builtin_echo(command_t &cmd) {
@@ -284,19 +285,6 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
     if(final_args.size()==1) {
         int count;
         path=".";
-        DIR *s_dir=opendir(path.c_str());
-        if(!s_dir) {
-            perror("ls failed");
-            return 1;
-        }
-        struct dirent *s_dir_entry=nullptr;
-        while(s_dir_entry==readdir(s_dir)) {
-            if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
-            string s_path=path+"/"+s_dir_entry->d_name;
-            count+=get_block_size(s_path);
-        }
-        if(list_all) cout<<"total "<<count<<endl;
-        path=".";
         DIR *dir=opendir(path.c_str());
         if(!dir) {
             perror("ls failed");
@@ -308,9 +296,10 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
             string full_path=path+"/"+dir_entry->d_name;
             if(!list_all) cout<<dir_entry->d_name<<endl;
             else {
-                display_fileInfo(full_path);
+                count+=display_fileInfo(full_path);
             }
         }
+        cout<<"total "<<count/2<<endl;
         closedir(dir);
     }
     else {
@@ -321,18 +310,6 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
                 path=home_dir+"/.";
             }
             int count;
-            DIR *s_dir=opendir(path.c_str());
-            if(!s_dir) {
-                perror("ls failed");
-                return 1;
-            }
-            struct dirent *s_dir_entry=nullptr;
-            while(s_dir_entry==readdir(s_dir)) {
-                if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
-                string s_path=path+"/"+s_dir_entry->d_name;
-                count+=get_block_size(s_path);
-            }
-            if(list_all) cout<<"total "<<count<<endl;
             cout<<final_args[i]<<"/:"<<endl;
             DIR *dir=opendir(path.c_str());
             if(!dir) {
@@ -345,9 +322,10 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
                 string full_path=path+"/"+dir_entry->d_name;
                 if(!list_all) cout<<dir_entry->d_name<<endl;
                 else {
-                    display_fileInfo(full_path);
+                    count+=display_fileInfo(full_path);
                 }
             }
+            cout<<"total "<<count/2<<endl;
             closedir(dir);
         }
     }
@@ -364,16 +342,16 @@ int builtin_pinfo(const pid_t &pid_in, const string& home_dir) {
         return 1;
     }
 
-    string pid, cmd, state;
+    string pid, cmd, state, spam;
     int pgrp, tpgid;
     unsigned long vsize;
 
     stat_file >> pid >> cmd >> state;
-    stat_file.ignore(numeric_limits<streamsize>::max(), ' ');
+    stat_file >> spam;
     stat_file >> pgrp;
-    for (int i = 0; i < 16; i++) stat_file >> ws;
+    stat_file >> spam >> spam;
     stat_file >> tpgid;
-    for (int i = 0; i < 7; i++) stat_file >> ws;
+    for (int i = 0; i < 14; i++) stat_file >> spam;
     stat_file >> vsize;
 
     cout << "Process Status -- {" << state;
