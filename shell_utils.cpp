@@ -66,25 +66,6 @@ vector<command_t> parse_input(string& input_string) {
     return commands;
 }
 
-// vector<command_t> parse_line(string& line) {
-//     vector<command_t> commands;
-    
-//     size_t pos = 0;
-//     string part;
-//     while ((pos = line.find(';')) != string::npos) 
-//     {
-//         part = line.substr(0, pos);
-//         line.erase(0, pos + 1); 
-//         if (part.empty()) continue;
-        
-//         commands.push_back(parse_single_command(part));
-//     }
-//     if (!line.empty()) {
-//         commands.push_back(parse_single_command(line));
-//     }
-//     return commands;
-// }
-
 vector<string> parse_line(string& line) {
     vector<string> commands;
     size_t pos = 0;
@@ -402,6 +383,33 @@ int execute_pipe(vector<command_t> &commands, const string& home_dir, const stri
     return 1;
 }
 
+bool builtin_search(const string &path, string& target_file) {
+    DIR *dir=opendir(path.c_str());
+    if(!dir) {
+        perror("search failed");
+        return false;
+    }
+    struct dirent *direntry;
+    while((direntry=readdir(dir))!=NULL) {
+        string filename(direntry->d_name);
+        if(filename=="." || filename=="..") continue;
+        if(filename==target_file) return true;
+        struct stat file_stat;
+        string full_path=path+"/"+filename;
+        if(stat(full_path.c_str(), &file_stat)!=0) {
+            continue;
+        }
+        if(S_ISDIR(file_stat.st_mode)) {
+            if(builtin_search(full_path, target_file)) {
+                closedir(dir);
+                return true;
+            }
+        }
+    }
+    closedir(dir);
+    return false;
+}
+
 int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd) {
     if(cmd.args[0]=="echo") {
         return builtin_echo(cmd);
@@ -426,6 +434,22 @@ int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, s
                 builtin_pinfo((pid_t)atoi(cmd.args[i].c_str()),home_dir);
             }
         }
+    }
+    else if(cmd.args[0]=="search") {
+        if(cmd.args.size()==1) {
+            perror("File/Dir not provided");
+            return 1;
+        }
+        else if(cmd.args.size()>2) {
+            perror("Invalid arguments");
+            return 1;
+        }
+        else{
+        cout<<(builtin_search(pwd, cmd.args[1])==true ? "True":"False")<<endl;
+        }
+    }
+    else if(cmd.args[0]=="history") {
+        
     }
     else {
         pid_t pid=fork();

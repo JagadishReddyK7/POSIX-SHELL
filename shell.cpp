@@ -4,6 +4,7 @@ using namespace std;
 
 stack<string> dir_st;
 string last_wd;
+string history_file="./shell_history.txt";
 
 void shell_loop() {
     char* input_line;
@@ -14,7 +15,6 @@ void shell_loop() {
     string cwd;
     int status=1;
     rl_bind_key('\t', handle_tab_stroke);
-    string history_file="/home/jagadish/Workspace/AOS_Assignment_2/shell_history.txt";
     read_history(history_file.c_str());
     
     do {

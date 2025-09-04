@@ -40,6 +40,8 @@ typedef struct
     command_t command;
 } pInfo_t;
 
+extern string history_file;
+
 sysInfo_t get_system_info();
 vector<command_t> parse_input(string& input_string);
 int handle_tab_stroke(int count, int key);
