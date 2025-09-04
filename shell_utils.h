@@ -16,6 +16,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <ctime>
+#include <readline/readline.h>
 
 using namespace std;
 
@@ -44,12 +45,13 @@ extern string history_file;
 
 sysInfo_t get_system_info();
 vector<command_t> parse_input(string& input_string);
-int handle_tab_stroke(int count, int key);
 int builtin_echo(vector<string>& args);
 int builtin_execute(command_t &cmd, const string& home_dir, const string& pwd, string& last_wd);
 int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd);
 int execute_pipe(vector<command_t> &commands, const string& home_dir, const string& pwd, string& last_wd);
 
+char **handle_tab_stroke(const char *inp, int left, int right);
+char *word_matcher(const char *target, int idx);
 vector<string> parse_line(string& line);
 vector<command_t> parse_pipe(string& line);
 command_t parse_single_command(string& part);

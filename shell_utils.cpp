@@ -42,30 +42,6 @@ vector<string> tokenize(string &part) {
     return tokens;
 }
 
-vector<command_t> parse_input(string& input_string) {
-    string part(input_string);
-    vector<command_t> commands;
-    size_t pos=0;
-    while((pos=input_string.find(';'))!=string::npos) {
-        part=input_string.substr(0, pos);
-        if(!part.empty()) {
-            commands.push_back(command_t());
-            commands.back().args=tokenize(part);
-        }
-        part.erase(0, pos+1);
-    }
-    if(!part.empty()) {
-        commands.push_back(command_t());
-        commands.back().args=tokenize(part);
-    }
-    for(command_t &cmd:commands) {
-        if(!cmd.args.empty() && cmd.args.back()=="&") {
-            cmd.args.pop_back();
-        }
-    }
-    return commands;
-}
-
 vector<string> parse_line(string& line) {
     vector<string> commands;
     size_t pos = 0;
@@ -91,14 +67,12 @@ vector<command_t> parse_pipe(string& line) {
     while ((pos = line.find('|')) != string::npos) 
     {
         part = line.substr(0, pos);
-        // cout<<part<<endl;
         line.erase(0, pos + 1); 
         if (part.empty()) continue;
         
         commands.push_back(parse_single_command(part));
     }
     if (!line.empty()) {
-        // cout<<line<<"pp"<<endl;
         commands.push_back(parse_single_command(line));
     }
     return commands;
@@ -147,9 +121,64 @@ command_t parse_single_command(string& part) {
     return cmd;
 }
 
-int handle_tab_stroke(int count, int key) {
+char **handle_tab_stroke(const char *inp, int left, int right) {
+    (void)right;
+    if (left == 0) return rl_completion_matches(inp, word_matcher);
+    return NULL;
+}
 
-    return 0;
+char *word_matcher(const char *target, int idx) {
+    static char *target_path = NULL;
+    static char *dir_path = NULL;
+    static DIR *dir_handle = NULL;
+
+    if (idx == 0) {
+        if (target_path) {
+            free(target_path);
+            target_path = NULL;
+        }
+        if (dir_handle) {
+            closedir(dir_handle);
+            dir_handle = NULL;
+        }
+        char *path_var = getenv("PATH");
+        if (path_var) {
+            target_path = strdup(path_var);
+        }
+        dir_path = strtok(target_path, ":");
+    }
+
+    while (dir_path) {
+        if (!dir_handle) {
+            dir_handle = opendir(dir_path);
+            dir_path = strtok(NULL, ":");
+            if (!dir_handle) {
+                continue;
+            }
+        }
+
+        struct dirent *file_entry = readdir(dir_handle);
+        if (!file_entry) {
+            closedir(dir_handle);
+            dir_handle = NULL;
+            continue;
+        }
+
+        if (strncmp(file_entry->d_name, target, strlen(target)) == 0) {
+            return strdup(file_entry->d_name);
+        }
+    }
+
+    if (target_path) {
+        free(target_path);
+        target_path = NULL;
+    }
+    if (dir_handle) {
+        closedir(dir_handle);
+        dir_handle = NULL;
+    }
+
+    return NULL;
 }
 
 int change_stdout_stdin(command_t &cmd) {
@@ -176,7 +205,7 @@ int change_stdout_stdin(command_t &cmd) {
 
 int get_block_size(string& path) {
     struct stat file_status;
-    if(lstat(path.c_str(), &file_status)==-1) {
+    if(stat(path.c_str(), &file_status)==-1) {
         perror("error retrieving file status");
         return 0;
     }
@@ -229,7 +258,6 @@ int builtin_echo(command_t &cmd) {
 }
 
 int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, string& last_wd) {
-    // const char* path=".";
     string path=".";
     bool show_hidden=false;
     bool list_all=false;
@@ -251,6 +279,7 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
         }
         struct dirent *s_dir_entry;
         while(s_dir_entry==readdir(s_dir)) {
+            if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
             string s_path=path+"/"+s_dir_entry->d_name;
             count+=get_block_size(s_path);
         }
@@ -274,8 +303,12 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
     }
     else {
         for(size_t i=1;i<final_args.size();i++) {
-            int count;
+            if(final_args[i]==".." && pwd==home_dir) final_args[i]=".";
             path=pwd+"/"+final_args[i];
+            if(final_args[i]=="~") {
+                path=home_dir+"/.";
+            }
+            int count;
             DIR *s_dir=opendir(path.c_str());
             if(!s_dir) {
                 perror("ls failed");
@@ -283,11 +316,11 @@ int builtin_ls(vector<string>& args, const string& home_dir, const string& pwd, 
             }
             struct dirent *s_dir_entry;
             while(s_dir_entry==readdir(s_dir)) {
+                if(!show_hidden && s_dir_entry->d_name[0]=='.') continue;
                 string s_path=path+"/"+s_dir_entry->d_name;
                 count+=get_block_size(s_path);
             }
             if(list_all) cout<<"total "<<count<<endl;
-            path=pwd+"/"+final_args[i];
             cout<<final_args[i]<<"/:"<<endl;
             DIR *dir=opendir(path.c_str());
             if(!dir) {
@@ -381,7 +414,6 @@ int builtin_cd(vector<string>& args, const string& home_dir, const string& pwd, 
 
 int execute_pipe(vector<command_t> &commands, const string& home_dir, const string& pwd, string& last_wd) {
     size_t num = commands.size();
-    // cout<<num<<"*******"<<endl;
     int pipes[num-1][2];
     for(size_t i=0;i<num-1;i++) {
         if(pipe(pipes[i])==-1) {
@@ -406,9 +438,7 @@ int execute_pipe(vector<command_t> &commands, const string& home_dir, const stri
                 close(pipes[j][0]);
                 close(pipes[j][1]);
             }
-            // cout<<commands[i].args[0]<<"########"<<endl;
             builtin_execute(commands[i], home_dir, pwd, last_wd);
-            // cout<<commands[i].args[0]<<"$$$$$$$$$$$$"<<endl;
             exit(0);
         }
     }
